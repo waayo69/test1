@@ -8,14 +8,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using ClosedXML.Excel;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
 
 namespace test1
 {
     public partial class Form1: Form
     {
         private string connectionString = @"Data Source=sql.bsite.net\MSSQL2016;Initial Catalog=waayo69_Clients;User ID=waayo69_Clients;Password=kris123asd;Encrypt=False; Connection Timeout=30";
-        private ToMonitor piste;
-        private bool isMinimized = false;
+        private DashboardForm piste;
         public Form1()
         {
             InitializeComponent();
@@ -24,7 +27,7 @@ namespace test1
         private void Form1_Load(object sender, EventArgs e)
         {
             reminderTimer.Start();
-            //ShowOnSecondMonitor();
+           //ShowOnSecondMonitor();
             cmbStatus.Items.AddRange(new string[] { "Pending", "Paid", "Overdue", "Postponed" });
             cmbStatus.SelectedIndex = 0;
             cmbStatus.ResetText();
@@ -37,7 +40,7 @@ namespace test1
                 var secondMonitor = Screen.AllScreens[1]; // Get the second monitor
                 if (piste == null || piste.IsDisposed)
                 {
-                    piste = new ToMonitor
+                    piste = new DashboardForm
                     {
                         StartPosition = FormStartPosition.Manual, // Position manually
                         Location = secondMonitor.WorkingArea.Location // Set location to the second monitor
@@ -54,7 +57,7 @@ namespace test1
                 MessageBox.Show("Only one monitor detected. Monitoring Window will open on the primary monitor.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 if (piste == null || piste.IsDisposed)
                 {
-                    piste = new ToMonitor();
+                    piste = new DashboardForm();
                 }
                 piste.Show();
             }
@@ -141,7 +144,7 @@ namespace test1
                 cmd.Parameters.AddWithValue("@id", paymentID);
 
                 conn.Open();
-                cmd.ExecuteNonQuery();
+                 cmd.ExecuteNonQuery();
                 conn.Close();
             }
 
@@ -285,6 +288,139 @@ namespace test1
         private void chkShowArchived_CheckedChanged(object sender, EventArgs e)
         {
             LoadPayments(); // Reload payments based on checkbox state
+        }
+
+        private void nudReminderDays_ValueChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnExportToExcel_Click(object sender, EventArgs e)
+        {
+            ExportToExcel();
+
+        }
+
+        private void ExportToExcel()
+        {
+            using (SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "Excel Files|*.xlsx", Title = "Save as Excel File" })
+            {
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    var workbook = new XLWorkbook();
+                    var worksheet = workbook.Worksheets.Add("Upcoming Payments");
+
+                    // Add Headers
+                    for (int i = 0; i < dgvPayments.Columns.Count; i++)
+                    {
+                        worksheet.Cell(1, i + 1).Value = dgvPayments.Columns[i].HeaderText;
+                    }
+
+                    decimal totalPaid = 0;
+                    int lastRow = 1;
+
+                    // Add Data & Calculate Total Paid
+                    for (int i = 0; i < dgvPayments.Rows.Count; i++)
+                    {
+                        for (int j = 0; j < dgvPayments.Columns.Count; j++)
+                        {
+                            var cellValue = dgvPayments.Rows[i].Cells[j].Value?.ToString();
+                            worksheet.Cell(i + 2, j + 1).Value = cellValue;
+
+                            // If status is "Paid" and column is Amount
+                            if (dgvPayments.Columns[j].HeaderText == "Amount" &&
+                                dgvPayments.Rows[i].Cells["Status"].Value?.ToString().ToLower() == "paid" &&
+                                decimal.TryParse(cellValue, out decimal amount))
+                            {
+                                totalPaid += amount;
+                            }
+                        }
+                        lastRow = i + 2;
+                    }
+
+                    // Add Total Paid at the bottom
+                    worksheet.Cell(lastRow + 2, 1).Value = "Total Paid:";
+                    worksheet.Cell(lastRow + 2, 2).Value = totalPaid;
+                    worksheet.Range(lastRow + 2, 1, lastRow + 2, 2).Style.Font.Bold = true;
+
+                    workbook.SaveAs(saveFileDialog.FileName);
+                    MessageBox.Show("Excel export successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+
+        private void btnExportToPDF_Click(object sender, EventArgs e)
+        {
+            ExportToPDF();
+        }
+
+        private void ExportToPDF()
+        {
+            using (SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "PDF Files|*.pdf", Title = "Save as PDF File" })
+            {
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    Document pdfDoc = new Document(PageSize.A4, 10, 10, 20, 20);
+                    PdfWriter.GetInstance(pdfDoc, new FileStream(saveFileDialog.FileName, FileMode.Create));
+                    pdfDoc.Open();
+
+                    PdfPTable pdfTable = new PdfPTable(dgvPayments.Columns.Count)
+                    {
+                        WidthPercentage = 100
+                    };
+
+                    // Add Headers
+                    foreach (DataGridViewColumn column in dgvPayments.Columns)
+                    {
+                        PdfPCell cell = new PdfPCell(new Phrase(column.HeaderText))
+                        {
+                            BackgroundColor = new BaseColor(240, 240, 240)
+                        };
+                        pdfTable.AddCell(cell);
+                    }
+
+                    decimal totalPaid = 0;
+
+                    // Add Rows & Calculate Total Paid
+                    foreach (DataGridViewRow row in dgvPayments.Rows)
+                    {
+                        foreach (DataGridViewCell cell in row.Cells)
+                        {
+                            pdfTable.AddCell(cell.Value?.ToString() ?? "");
+                        }
+
+                        if (row.Cells["Status"].Value?.ToString().ToLower() == "paid" &&
+                            decimal.TryParse(row.Cells["Amount"].Value?.ToString(), out decimal amount))
+                        {
+                            totalPaid += amount;
+                        }
+                    }
+
+                    // Add to PDF
+                    pdfDoc.Add(new Paragraph("Upcoming Payments Report") { Alignment = Element.ALIGN_CENTER });
+                    pdfDoc.Add(new Paragraph($"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n"));
+                    pdfDoc.Add(pdfTable);
+
+                    // Add Total Paid Summary
+                    pdfDoc.Add(new Paragraph($"\nTotal Paid: ₱{totalPaid:N2}") { Alignment = Element.ALIGN_RIGHT, Font = FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 12) });
+
+                    pdfDoc.Close();
+                    MessageBox.Show("PDF export successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        private void btnMainMenu_Click(object sender, EventArgs e)
+        {
+            MainMenu main = new MainMenu();
+            main.Show();
+            this.Hide();
+        }
+
+        private void btnClose_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
         }
     }
 }
