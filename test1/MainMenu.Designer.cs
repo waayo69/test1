@@ -72,7 +72,7 @@
             this.btnClose.BackColor = System.Drawing.Color.Transparent;
             this.btnClose.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnClose.Font = new System.Drawing.Font("Microsoft Sans Serif", 10.2F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnClose.Location = new System.Drawing.Point(1045, 0);
+            this.btnClose.Location = new System.Drawing.Point(1266, 23);
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(33, 32);
             this.btnClose.TabIndex = 4;
@@ -99,7 +99,7 @@
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelTop.Location = new System.Drawing.Point(0, 0);
             this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(1078, 73);
+            this.panelTop.Size = new System.Drawing.Size(1419, 73);
             this.panelTop.TabIndex = 6;
             // 
             // panelLeft
@@ -112,7 +112,7 @@
             this.panelLeft.Dock = System.Windows.Forms.DockStyle.Left;
             this.panelLeft.Location = new System.Drawing.Point(0, 73);
             this.panelLeft.Name = "panelLeft";
-            this.panelLeft.Size = new System.Drawing.Size(167, 511);
+            this.panelLeft.Size = new System.Drawing.Size(167, 640);
             this.panelLeft.TabIndex = 7;
             // 
             // pictureBox1
@@ -132,7 +132,7 @@
             this.panelBase.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panelBase.Location = new System.Drawing.Point(167, 73);
             this.panelBase.Name = "panelBase";
-            this.panelBase.Size = new System.Drawing.Size(911, 511);
+            this.panelBase.Size = new System.Drawing.Size(1252, 640);
             this.panelBase.TabIndex = 8;
             // 
             // MainMenu
@@ -140,7 +140,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(1078, 584);
+            this.ClientSize = new System.Drawing.Size(1419, 713);
             this.Controls.Add(this.panelBase);
             this.Controls.Add(this.panelLeft);
             this.Controls.Add(this.panelTop);
