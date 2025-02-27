@@ -20,6 +20,7 @@ namespace test1
     {
         private string connectionString = @"Data Source=sql.bsite.net\MSSQL2016;Initial Catalog=waayo69_Clients;User ID=waayo69_Clients;Password=kris123asd;Encrypt=False; Connection Timeout=30";
         private DashboardForm piste;
+        public string wala = "One time payment";
         public Form1()
         {
             InitializeComponent();
@@ -37,6 +38,7 @@ namespace test1
             cmbStatus.ResetText();
         }
 
+        #region ShowOnSecondMonitor
         private void ShowOnSecondMonitor()
         {
             if (Screen.AllScreens.Length > 1) // Check if there are multiple monitors
@@ -66,7 +68,9 @@ namespace test1
                 piste.Show();
             }
         }
+        #endregion
 
+        #region button Add Payment
         private void btnAddPayment_Click(object sender, EventArgs e)
         {
             string paymentName = txtPaymentName.Text.Trim();
@@ -77,9 +81,10 @@ namespace test1
             string recurrenceFrequency = isRecurring ? cmbRecurrenceFrequency.SelectedItem?.ToString() : null;
             //string category = cmbCategory.SelectedItem?.ToString() ?? "General";
             string category  = txtCategory.Text.Trim();
+            DateTime paiddate = dtpDatePaid.Value;
 
-            string query = @"INSERT INTO Payments (PaymentName, Amount, DueDate, Status, IsRecurring, RecurrenceFrequency, Category)
-                     VALUES (@name, @amount, @dueDate, @status, @isRecurring, @frequency, @category)";
+            string query = @"INSERT INTO Payments (PaymentName, Amount, DueDate, Status, IsRecurring, RecurrenceFrequency, Category, PaidDate)
+                     VALUES (@name, @amount, @dueDate, @status, @isRecurring, @frequency, @category, @paiddate)";
 
             using (SqlConnection conn = new SqlConnection(connectionString))
             using (SqlCommand cmd = new SqlCommand(query, conn))
@@ -87,10 +92,21 @@ namespace test1
                 cmd.Parameters.AddWithValue("@name", paymentName);
                 cmd.Parameters.AddWithValue("@amount", amount);
                 cmd.Parameters.AddWithValue("@dueDate", dueDate);
-                cmd.Parameters.AddWithValue("@status", status);
+                if(status=="Paid")
+                {
+                    cmd.Parameters.AddWithValue("@status", status+"\n"+paiddate);
+                }
+                else
+                {
+                    cmd.Parameters.AddWithValue("@status", status);
+                    cmd.Parameters.AddWithValue("@paiddate", paiddate);
+
+                    this.dgvPayments.Columns["PaymentID"].Visible = false;
+                }
                 cmd.Parameters.AddWithValue("@isRecurring", isRecurring);
                 cmd.Parameters.AddWithValue("@frequency", (object)recurrenceFrequency ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@category", category);
+                
 
                 conn.Open();
                 cmd.ExecuteNonQuery();
@@ -100,23 +116,24 @@ namespace test1
             LoadPayments();
             ClearFormInputs();
         }
+        #endregion
 
-
+        #region Load Payments Method
         private void LoadPayments()
         {
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
-                string query = "SELECT PaymentID, PaymentName, Amount, DueDate, Status, IsRecurring, RecurrenceFrequency, Category FROM Payments";
-                SqlDataAdapter da = new SqlDataAdapter(query, conn);
+                string query = "SELECT PaymentID, PaymentName, Amount, DueDate, Status, IsRecurring, RecurrenceFrequency, Category, PaidDate FROM Payments WHERE IsArchived = 0 ORDER BY DueDate ASC";
+                SqlDataAdapter adapter = new SqlDataAdapter(query, conn);
                 DataTable dt = new DataTable();
-                da.Fill(dt);
+                adapter.Fill(dt);
                 dgvPayments.DataSource = dt;
-
-                // Optional: Auto-size columns
-                dgvPayments.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                this.dgvPayments.Columns["PaymentID"].Visible = false;
             }
         }
+        #endregion
 
+        #region btnUpdatePayment
         private void btnUpdatePayment_Click(object sender, EventArgs e)
         {
             if (dgvPayments.SelectedRows.Count == 0)
@@ -126,39 +143,46 @@ namespace test1
             }
 
             int paymentID = Convert.ToInt32(dgvPayments.SelectedRows[0].Cells["PaymentID"].Value);
-            string paymentName = txtPaymentName.Text.Trim();
-            decimal amount = decimal.Parse(txtAmount.Text);
+            string paymentName = txtPaymentName.Text;
+            decimal amount = Convert.ToDecimal(txtAmount.Text);
             DateTime dueDate = dtpDueDate.Value;
-            string status = cmbStatus.SelectedItem?.ToString() ?? "Pending";
+            string status = cmbStatus.SelectedItem.ToString();
             bool isRecurring = chkRecurring.Checked;
             string recurrenceFrequency = isRecurring ? cmbRecurrenceFrequency.SelectedItem?.ToString() : null;
-            string category = cmbCategory.SelectedItem?.ToString() ?? "General";
-
-            string query = @"UPDATE Payments 
-                     SET PaymentName=@name, Amount=@amount, DueDate=@dueDate, Status=@status, 
-                         IsRecurring=@isRecurring, RecurrenceFrequency=@frequency, Category=@category 
-                     WHERE PaymentID=@id";
+            // Get user-defined Paid Date only if status is "Paid"
+            DateTime? paidDate = (status == "Paid") ? dtpPaidDate.Value : (DateTime?)null;
 
             using (SqlConnection conn = new SqlConnection(connectionString))
-            using (SqlCommand cmd = new SqlCommand(query, conn))
             {
+                string query = "UPDATE Payments SET PaymentName=@name, Amount=@amount, DueDate=@dueDate, Status=@status, PaidDate=@paidDate WHERE PaymentID=@id";
+                SqlCommand cmd = new SqlCommand(query, conn);
                 cmd.Parameters.AddWithValue("@name", paymentName);
                 cmd.Parameters.AddWithValue("@amount", amount);
                 cmd.Parameters.AddWithValue("@dueDate", dueDate);
                 cmd.Parameters.AddWithValue("@status", status);
-                cmd.Parameters.AddWithValue("@isRecurring", isRecurring);
-                cmd.Parameters.AddWithValue("@frequency", (object)recurrenceFrequency ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@category", category);
                 cmd.Parameters.AddWithValue("@id", paymentID);
+
+                // Handle NULL for PaidDate
+                if (paidDate.HasValue)
+                {
+                    cmd.Parameters.AddWithValue("@paidDate", paidDate.Value);
+                }
+                else
+                {
+                    cmd.Parameters.AddWithValue("@paidDate", DBNull.Value);
+                }
 
                 conn.Open();
                 cmd.ExecuteNonQuery();
+                conn.Close();
             }
 
             MessageBox.Show("Payment updated successfully!");
-            LoadPayments();
+            LoadPayments(); // Refresh DataGridView
         }
+        #endregion
 
+        # region ClearFormInputs
         private void ClearFormInputs()
         {
             txtPaymentName.Clear();
@@ -198,11 +222,16 @@ namespace test1
                 LoadPayments();
             }
         }
+        #endregion
+
+        #region GetReminderDays
         private int GetReminderDays()
         {
             return (int)nudReminderDays.Value; // User sets reminder days (e.g., 3 days before due date)
         }
+        #endregion
 
+        #region btnCheckReminders
         private void btnCheckReminders_Click(object sender, EventArgs e)
         {
             int reminderDays = GetReminderDays();
@@ -230,21 +259,30 @@ namespace test1
                 conn.Close();
             }
         }
+        #endregion
+
         //private void ShowReminder(string paymentName, DateTime dueDate)
         //{
         //    MessageBox.Show($"Reminder: {paymentName} is due on {dueDate:MMMM dd, yyyy}.", "Payment Reminder", MessageBoxButtons.OK, MessageBoxIcon.Information);
         //}
+
+        #region Show Reminder
         private void ShowReminder(string paymentName, DateTime dueDate)
         {
             notifyIcon1.BalloonTipTitle = "Payment Reminder";
             notifyIcon1.BalloonTipText = $"{paymentName} is due on {dueDate:MMMM dd, yyyy}.";
             notifyIcon1.ShowBalloonTip(500000); // Shows for 5 seconds
         }
+        #endregion
+
+        #region Reminder Timer
         private void ReminderTimer_Tick(object sender, EventArgs e)
         {
             btnCheckReminders.PerformClick();
         }
+        #endregion
 
+        #region Archive Payment
         private void btnArchivePayment_Click(object sender, EventArgs e)
         {
             if (dgvPayments.SelectedRows.Count == 0)
@@ -273,7 +311,9 @@ namespace test1
                 LoadPayments();
             }
         }
+        #endregion
 
+        #region Restore Payment
         private void btnRestorePayment_Click(object sender, EventArgs e)
         {
             if (dgvPayments.SelectedRows.Count == 0)
@@ -302,23 +342,30 @@ namespace test1
                 LoadPayments();
             }
         }
+        #endregion
 
+        #region Export to Excel
         private void chkShowArchived_CheckedChanged(object sender, EventArgs e)
         {
             LoadPayments(); // Reload payments based on checkbox state
         }
+        #endregion
 
+        #region nudReminderDays
         private void nudReminderDays_ValueChanged(object sender, EventArgs e)
         {
 
         }
+        #endregion
 
+        #region Export to Excel button
         private void btnExportToExcel_Click(object sender, EventArgs e)
         {
             ExportToExcel();
 
         }
-
+        #endregion
+        #region Export to Excel Method
         private void ExportToExcel()
         {
             using (SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "Excel Files|*.xlsx", Title = "Save as Excel File" })
@@ -366,13 +413,15 @@ namespace test1
                 }
             }
         }
+        #endregion
 
-
+        #region Export to PDF button
         private void btnExportToPDF_Click(object sender, EventArgs e)
         {
             ExportToPDF();
         }
-
+        #endregion
+        #region Export to PDF Method
         private void ExportToPDF()
         {
             using (SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "PDF Files|*.pdf", Title = "Save as PDF File" })
@@ -428,116 +477,141 @@ namespace test1
                 }
             }
         }
-        private void CheckAndCreateRecurringPayments()
-        {
-            string query = @"
-        SELECT ExpenseID, ExpenseName, Amount, ExpenseDate, RecurrenceFrequency 
-        FROM Expenses 
-        WHERE IsRecurring = 1";
+        #endregion
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            using (SqlCommand cmd = new SqlCommand(query, conn))
-            {
-                conn.Open();
-                using (SqlDataReader reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        int expenseId = reader.GetInt32(0);
-                        string frequency = reader["RecurrenceFrequency"]?.ToString();
-                        DateTime expenseDate = (DateTime)reader["ExpenseDate"];
-                        DateTime nextDueDate;
-                        switch (frequency)
-                        {
-                            case "Monthly":
-                                nextDueDate = expenseDate.AddMonths(1);
-                                break;
-                            case "Weekly":
-                                nextDueDate = expenseDate.AddDays(7);
-                                break;
-                            case "Yearly":
-                                nextDueDate = expenseDate.AddYears(1);
-                                break;
-                            default:
-                                nextDueDate = expenseDate;
-                                break;
-                        }
+        //private void CheckAndCreateRecurringPayments()
+        //{
+        //    string query = @"
+        //SELECT ExpenseID, ExpenseName, Amount, ExpenseDate, RecurrenceFrequency 
+        //FROM Expenses 
+        //WHERE IsRecurring = 1";
 
-
-                        if (DateTime.Today >= nextDueDate)
-                        {
-                            CreateNextRecurringExpense(expenseId, nextDueDate);
-                        }
-                    }
-                }
-            }
-        }
-
-        private void CreateNextRecurringExpense(int expenseId, DateTime nextDueDate)
-        {
-            string insertQuery = @"
-        INSERT INTO Expenses (ExpenseName, Amount, ExpenseDate, Status, IsRecurring, RecurrenceFrequency)
-        SELECT ExpenseName, Amount, @nextDate, 'Pending', IsRecurring, RecurrenceFrequency
-        FROM Expenses WHERE ExpenseID = @id";
-
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            using (SqlCommand cmd = new SqlCommand(insertQuery, conn))
-            {
-                cmd.Parameters.AddWithValue("@nextDate", nextDueDate);
-                cmd.Parameters.AddWithValue("@id", expenseId);
-
-                conn.Open();
-                cmd.ExecuteNonQuery();
-            }
-        }
+        //    using (SqlConnection conn = new SqlConnection(connectionString))
+        //    using (SqlCommand cmd = new SqlCommand(query, conn))
+        //    {
+        //        conn.Open();
+        //        using (SqlDataReader reader = cmd.ExecuteReader())
+        //        {
+        //            while (reader.Read())
+        //            {
+        //                int expenseId = reader.GetInt32(0);
+        //                string frequency = reader["RecurrenceFrequency"]?.ToString();
+        //                DateTime expenseDate = (DateTime)reader["ExpenseDate"];
+        //                DateTime nextDueDate;
+        //                switch (frequency)
+        //                {
+        //                    case "Monthly":
+        //                        nextDueDate = expenseDate.AddMonths(1);
+        //                        break;
+        //                    case "Weekly":
+        //                        nextDueDate = expenseDate.AddDays(7);
+        //                        break;
+        //                    case "Yearly":
+        //                        nextDueDate = expenseDate.AddYears(1);
+        //                        break;
+        //                    default:
+        //                        nextDueDate = expenseDate;
+        //                        break;
+        //                }
 
 
+        //                if (DateTime.Today >= nextDueDate)
+        //                {
+        //                    CreateNextRecurringExpense(expenseId, nextDueDate);
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
+
+        //private void CreateNextRecurringExpense(int expenseId, DateTime nextDueDate)
+        //{
+        //    string insertQuery = @"
+        //INSERT INTO Expenses (ExpenseName, Amount, ExpenseDate, Status, IsRecurring, RecurrenceFrequency)
+        //SELECT ExpenseName, Amount, @nextDate, 'Pending', IsRecurring, RecurrenceFrequency
+        //FROM Expenses WHERE ExpenseID = @id";
+
+        //    using (SqlConnection conn = new SqlConnection(connectionString))
+        //    using (SqlCommand cmd = new SqlCommand(insertQuery, conn))
+        //    {
+        //        cmd.Parameters.AddWithValue("@nextDate", nextDueDate);
+        //        cmd.Parameters.AddWithValue("@id", expenseId);
+
+        //        conn.Open();
+        //        cmd.ExecuteNonQuery();
+        //    }
+        //}
+
+        #region Main Menu Button
         private void btnMainMenu_Click(object sender, EventArgs e)
         {
             MainMenu main = new MainMenu();
             main.Show();
             this.Hide();
         }
+        #endregion
 
+        #region Close Button
         private void btnClose_Click(object sender, EventArgs e)
         {
             Application.Exit();
         }
+        #endregion
 
+        #region chkRecurring
         private void chkRecurring_CheckedChanged(object sender, EventArgs e)
         {
             cmbRecurrenceFrequency.Enabled = chkRecurring.Checked;
         }
+        #endregion
 
-        private void dgvPayments_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-
-        }
-
+        #region dgvPayments
         private void dgvPayments_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvPayments.SelectedRows.Count > 0)
             {
                 DataGridViewRow row = dgvPayments.SelectedRows[0];
 
-                txtPaymentName.Text = row.Cells["PaymentName"]?.Value?.ToString() ?? string.Empty;
-                txtAmount.Text = row.Cells["Amount"]?.Value?.ToString() ?? string.Empty;
-
-                if (row.Cells["DueDate"]?.Value != null)
-                    dtpDueDate.Value = Convert.ToDateTime(row.Cells["DueDate"].Value);
-
-                cmbStatus.SelectedItem = row.Cells["Status"]?.Value?.ToString() ?? "Pending";
+                txtPaymentName.Text = row.Cells["PaymentName"].Value.ToString();
+                txtAmount.Text = row.Cells["Amount"].Value.ToString();
+                dtpDueDate.Value = Convert.ToDateTime(row.Cells["DueDate"].Value);
+                cmbStatus.SelectedItem = row.Cells["Status"].Value.ToString();
                 chkRecurring.Checked = Convert.ToBoolean(row.Cells["IsRecurring"].Value);
-                cmbRecurrenceFrequency.SelectedItem = row.Cells["RecurrenceFrequency"]?.Value?.ToString() ?? string.Empty;
+                cmbRecurrenceFrequency.SelectedItem = row.Cells["RecurrenceFrequency"].Value?.ToString();
+                txtCategory.Text = row.Cells["Category"].Value.ToString();
+
+                // Handle PaidDate (if NULL, hide it)
+                if (row.Cells["PaidDate"].Value != DBNull.Value)
+                {
+                    dtpPaidDate.Value = Convert.ToDateTime(row.Cells["PaidDate"].Value);
+                    dtpPaidDate.Visible = true;
+                    lblPaidDate.Visible = true;
+                }
+                else
+                {
+                    dtpPaidDate.Visible = false;
+                    lblPaidDate.Visible = false;
+                }
+            }
+        }
+        #endregion
+
+        #region cmbStatus
+        private void cmbStatus_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbStatus.SelectedItem == null)
+                return; // Prevents NullReferenceException if nothing is selected
+            if (cmbStatus.SelectedItem.ToString() == "Paid")
+            {
+                dtpPaidDate.Visible = true;
+                lblPaidDate.Visible = true;
             }
             else
             {
-                // Clear fields if no row is selected (optional)
-                txtPaymentName.Clear();
-                txtAmount.Clear();
-                dtpDueDate.Value = DateTime.Today;
-                cmbStatus.SelectedIndex = -1;
+                dtpPaidDate.Visible = false;
+                lblPaidDate.Visible = false;
             }
         }
+        #endregion
     }
 }
