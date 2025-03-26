@@ -4,83 +4,102 @@
     <meta charset="UTF-8">
     <title>Payment Tracking Overview</title>
     <meta http-equiv="refresh" content="60"> <!-- Refresh every 60 seconds -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f2f2f2; padding: 20px; }
-        h2 { text-align: center; margin-bottom: 20px; }
+        body { font-family: Arial, sans-serif; background-color: #f2f2f2; padding: 20px; text-align: center; }
+        h2 { margin-bottom: 20px; }
 
-        table { width: 100%; border-collapse: collapse; background-color: #fff; margin-top: 10px; }
-        th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
-        th { background-color: #333; color: #fff; }
+        /* Month Box Styling */
+        .months-container { display: flex; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+        .month-box { 
+            padding: 15px 20px; margin: 5px; background-color: #007bff; color: white; 
+            border-radius: 5px; cursor: pointer; font-weight: bold;
+        }
+        .month-box:hover { background-color: #0056b3; }
 
-        .status { font-weight: bold; padding: 8px; border-radius: 4px; color: #fff; }
-        .paid { background-color: rgb(0, 168, 0); }
-        .pending { background-color: rgb(255, 193, 7); color: #000; }
-        .overdue { background-color: rgb(220, 53, 69); }
-        .postponed { background-color: rgb(255, 140, 0); }
-
-        .yes { color: green; font-weight: bold; }
-        .no { color: red; font-weight: bold; }
+        /* Calendar Container */
+        #calendar-container { display: none; margin-top: 20px; }
+        #calendar { max-width: 900px; margin: auto; background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body>
     <h2>Payment Tracking Overview</h2>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Payment Name</th>
-                <th>Amount</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Recurrence Frequency</th>
-                <th>Category</th>
-            </tr>
-        </thead>
-        <tbody id="paymentTableBody">
-            <tr><td colspan="7">Loading payments...</td></tr>
-        </tbody>
-    </table>
+    <!-- Month Selection -->
+    <div class="months-container">
+        <div class="month-box" data-month="1">January</div>
+        <div class="month-box" data-month="2">February</div>
+        <div class="month-box" data-month="3">March</div>
+        <div class="month-box" data-month="4">April</div>
+        <div class="month-box" data-month="5">May</div>
+        <div class="month-box" data-month="6">June</div>
+        <div class="month-box" data-month="7">July</div>
+        <div class="month-box" data-month="8">August</div>
+        <div class="month-box" data-month="9">September</div>
+        <div class="month-box" data-month="10">October</div>
+        <div class="month-box" data-month="11">November</div>
+        <div class="month-box" data-month="12">December</div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="calendar-container">
+        <h3 id="selectedMonth"></h3>
+        <div id="calendar"></div>
+    </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            fetch('fetch_payments.php')
-                .then(response => response.json())
-                .then(data => {
-                    const tableBody = document.getElementById('paymentTableBody');
-                    tableBody.innerHTML = '';
+        document.addEventListener("DOMContentLoaded", function() {
+            let calendar;
+            
+            // When a month is clicked, load the calendar
+            document.querySelectorAll(".month-box").forEach(box => {
+                box.addEventListener("click", function() {
+                    let selectedMonth = this.dataset.month;
+                    let selectedYear = new Date().getFullYear(); // Use the current year
+                    document.getElementById("selectedMonth").textContent = `Payments for ${this.textContent} ${selectedYear}`;
 
-                    if (data.error) {
-                        tableBody.innerHTML = `<tr><td colspan="7">${data.error}</td></tr>`;
-                        return;
-                    }
+                    // Show calendar container
+                    document.getElementById("calendar-container").style.display = "block";
 
-                    if (data.length === 0) {
-                        tableBody.innerHTML = `<tr><td colspan="7">No payments found.</td></tr>`;
-                        return;
-                    }
+                    // Destroy existing calendar instance if needed
+                    if (calendar) calendar.destroy();
 
-                    data.forEach(payment => {
-                        const statusClass = {
-                            paid: 'paid',
-                            pending: 'pending',
-                            overdue: 'overdue',
-                            postponed: 'postponed'
-                        }[payment.Status.toLowerCase()] || 'pending';
-
-                        tableBody.innerHTML += `
-                            <tr>
-                                <td>${payment.PaymentName}</td>
-                                <td>₱${payment.Amount}</td>
-                                <td>${payment.DueDate}</td>
-                                <td><span class="status ${statusClass}">${payment.Status}</span></td>
-                                <td>${payment.RecurrenceFrequency}</td>
-                                <td>${payment.Category}</td>
-                            </tr>`;
+                    // Initialize FullCalendar
+                    calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+                        initialView: 'dayGridMonth',
+                        initialDate: `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`,
+                        events: function(fetchInfo, successCallback, failureCallback) {
+                            fetch('fetch_payments.php')
+                                .then(response => response.json())
+                                .then(data => {
+                                    let events = data
+                                        .filter(payment => new Date(payment.DueDate).getMonth() + 1 == selectedMonth)
+                                        .map(payment => ({
+                                            title: payment.PaymentName + " - ₱" + payment.Amount,
+                                            start: payment.DueDate,
+                                            color: getStatusColor(payment.Status)
+                                        }));
+                                    successCallback(events);
+                                })
+                                .catch(() => failureCallback());
+                        }
                     });
-                })
-                .catch(() => {
-                    document.getElementById('paymentTableBody').innerHTML = `<tr><td colspan="7">Error loading data.</td></tr>`;
+                    
+                    // Render calendar
+                    calendar.render();
                 });
+            });
+
+            // Function to get color based on payment status
+            function getStatusColor(status) {
+                switch (status.toLowerCase()) {
+                    case "paid": return "green";
+                    case "pending": return "orange";
+                    case "overdue": return "red";
+                    case "postponed": return "purple";
+                    default: return "blue";
+                }
+            }
         });
     </script>
 </body>
